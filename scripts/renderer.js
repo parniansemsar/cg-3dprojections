@@ -62,6 +62,8 @@ class Renderer {
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+        //this.drawLine(line.pt0.x, line.pt0.y, line.pt1.x, line.pt1.y)
+
         // TODO: implement drawing here!
         // For each model
         //   * For each vertex
@@ -71,6 +73,8 @@ class Renderer {
         //     * project to 2D
         //     * translate/scale to viewport (i.e. window)
         //     * draw line
+
+
     }
 
     // Get outcode for a vertex
@@ -104,16 +108,70 @@ class Renderer {
     // line:         object {pt0: Vector4, pt1: Vector4}
     // z_min:        float (near clipping plane in canonical view volume)
     clipLinePerspective(line, z_min) {
-        let result = null;
-        let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z); 
-        let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
+        let p0 = CG.Vector3(line.pt0.x, line.pt0.y, line.pt0.z); 
+        let p1 = CG.Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
         let out0 = this.outcodePerspective(p0, z_min);
         let out1 = this.outcodePerspective(p1, z_min);
-        
-        // TODO: implement clipping here!
-        
-        return result;
+
+        //Base Cases : trivially accept or reject
+        if ((out0 | out1) == 0){
+            return line
+        }
+        else if ((out0 & out1) != 0){
+            return null
+        }
+
+        //Find intersect
+        else{
+            let point, out, t
+
+            // Ensure point is outside view
+            if(out0 != 0){
+                point = p0
+                out = out0
+            } else {
+                point = p1
+                out = out1
+            }
+
+            let deltaX = p1.x - p0.x
+            let deltaY = p1.y - p0.y
+            let deltaZ = p1.z - p0.z
+
+            if (out & LEFT){ // L of left
+                t = (-point.x + point.z) / (deltaX - deltaZ)
+            }
+            else if (out & RIGHT){ // R of right
+                t = (point.x + point.z) / (-deltaX - deltaZ)
+            }
+            else if (out & BOTTOM){ // Below bottom
+                t = (-point.y + point.z) / (deltaY - deltaZ)
+            }
+            else if (out & TOP){ // Above top
+                t = (point.y + point.z) / (-deltaY - deltaZ)
+            }
+            else if (out & FAR){ // Farther than far
+                t = (-1 - point.z) / deltaZ
+            }
+            else { // Closer than near
+                t = (point.z - z_min) / (-deltaZ)
+            }
+            let x = p0.x + t * deltaX
+            let y = p0.y + t * deltaY
+            let z = p0.z + t * deltaZ
+
+            if(out0 != 0){
+                line.pt0 = CG.Vector4(x,y,z,1)
+            } else {
+                line.pt1 = CG.Vector4(x,y,z,1)
+            }
+
+            return this.clipLinePerspective(line, z_min)
+        }
     }
+
+
+
 
     //
     animate(timestamp) {
@@ -211,6 +269,11 @@ class Renderer {
         this.ctx.fillRect(x0 - 2, y0 - 2, 4, 4);
         this.ctx.fillRect(x1 - 2, y1 - 2, 4, 4);
     }
+};
+
+//Helper to identify 1 bits in outcode
+function isOneBit(code, bitIndex) {
+    return (code & (1 << bitIndex)) !== 0;
 };
 
 export { Renderer };
